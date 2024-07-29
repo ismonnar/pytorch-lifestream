@@ -1,10 +1,11 @@
+from functools import reduce
 from typing import List
 
+import joblib
 import torch
 import pandas as pd
-from tqdm import tqdm
-from joblib import parallel_backend, parallel_config, delayed, Parallel
-
+from joblib import delayed, Parallel
+from collections import ChainMap
 from ptls.preprocessing.base.transformation.col_numerical_transformer import ColTransformer
 
 
@@ -49,8 +50,9 @@ class UserGroupTransformer(ColTransformer):
             raise AttributeError(f'"event_time" not in source dataframe. '
                                  f'Found {x.columns}')
 
-    def _convert_type(self, group_name: int, group_df: pd.DataFrame):
+    def _convert_type(self, group_name, group_df):
         group = {}
+
         for k, v in group_df.to_dict(orient='series').items():
             if k in self.cols_first_item:
                 v = v.iloc[0]
@@ -67,19 +69,16 @@ class UserGroupTransformer(ColTransformer):
         self._event_time_exist(x)
         return self
 
-    def df_to_feature_arrays(self, df: pd.DataFrame):
-        with parallel_config(backend='threading'):
-                result_dict = Parallel()(delayed(self._convert_type)(group_name, df_group)
-                                         for group_name, df_group in tqdm(df))
-        return pd.Series(result_dict)
+    def df_to_feature_arrays(self, df):
+        with joblib.parallel_backend(backend='threading'):
+            parallel = Parallel(verbose=1)
+            result_dict = parallel(delayed(self._convert_type)(group_name, df_group)
+                                   for group_name, df_group in df)
+
+        return result_dict
 
     def transform(self, x: pd.DataFrame):
         x = x.set_index([self.col_name_original, 'event_time']).sort_index().groupby(self.col_name_original)
         x = self.df_to_feature_arrays(x)
-        # TODO: Bring output to origin format
-        # For coles-emb demo its:
-        # Origin    pd.DataFrame(['client_id', 'trans_date', 'event_time', 'small_group', 'amount_rur'])
-        # New       pd.Series(dict('client_id': dict('small_group', 'amount_rur'))
-        
-        # x = x.to_dict(orient='records') if self.return_records else x # Doesnt work with pd.Series
+        x = x if self.return_records else pd.Series(x)
         return x
