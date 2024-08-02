@@ -1,4 +1,3 @@
-import pandas as pd
 from ptls.data_load.iterable_processing_dataset import IterableProcessingDataset
 from ptls.data_load.augmentations.seq_len_limit import SeqLenLimit
 import numpy as np
@@ -6,17 +5,8 @@ import torch
 
 
 class Filtering(IterableProcessingDataset):
-    def __init__(self, mode: str, 
-                 id_col: str = None, 
-                 relevant_ids: list = None,
-                 category_max_size: dict = None,
-                 replace_value: str = 'max',
-                 min_seq_len: int = None, 
-                 max_seq_len: int = None, 
-                 seq_len_col: str = None,
-                 sequence_col: str = None,
-                 df_relevant_ids: pd.DataFrame=None,
-                 strategy: str = 'tail'):
+    def __init__(self, mode, id_col=None, relevant_ids=None, category_max_size=None, replace_value='max',
+                 min_seq_len=None, max_seq_len=None, seq_len_col=None, sequence_col=None, df_relevant_ids=None, strategy='tail'):
         super().__init__()
         self.mode = mode
         self._id_col = id_col
@@ -44,14 +34,12 @@ class Filtering(IterableProcessingDataset):
                 yield rec
 
             elif self.mode == 'IdFilter':
-                # Required to have id_col and relevant_ids
                 _id = features[self._id_col]
                 if not self._is_in_relevant_ids_with_type(_id):
                     continue
                 yield rec
 
             elif self.mode == 'CategorySizeClip':
-                # Required to have category_max_size
                 for name, max_size in self._category_max_size.items():
                     features[name] = self._smart_clip(features[name], max_size)
                 yield rec
@@ -94,6 +82,14 @@ class Filtering(IterableProcessingDataset):
             return values.clip(0, max_size - 1)
         else:
             return torch.from_numpy(np.where((0 <= values) & (values < max_size), values, self._replace_value))
+
+    def get_sequence_col(self, rec):
+        if self._sequence_col is None:
+            arrays = [k for k, v in rec.items() if self.is_seq_feature(k, v)]
+            if len(arrays) == 0:
+                raise ValueError(f'Can not find field with sequence from record: {rec}')
+            self._sequence_col = arrays[0]
+        return self._sequence_col
 
     def get_len(self, rec):
         if self._seq_len_col is not None:
