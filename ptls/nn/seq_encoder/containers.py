@@ -63,9 +63,7 @@ class SeqEncoderContainer(torch.nn.Module):
     def embedding_size(self):
         return self.seq_encoder.embedding_size
 
-    def forward(self, x, names=None, seq_len=None):
-        if names and seq_len is not None:
-            raise NotImplementedError
+    def forward(self, x: PaddedBatch):
         x = self.trx_encoder(x)
         x = self.seq_encoder(x)
         return x
@@ -124,8 +122,8 @@ class RnnSeqEncoder(SeqEncoderContainer):
             is_reduce_sequence=is_reduce_sequence,
         )
 
-    def forward(self, x, names=None, seq_len=None, h_0=None):
-        x = self.trx_encoder(x, names, seq_len)
+    def forward(self, x: PaddedBatch, h_0=None):
+        x = self.trx_encoder(x)
         x = self.seq_encoder(x, h_0)
         return x
 
