@@ -36,8 +36,7 @@ dtype_dict = {'i': torch.long,
               'f': torch.float,
               'b': torch.bool}
 
-
-def collate_feature_dict(batch):
+def collate_feature(batch):
     """Collate feature with arrays to padded batch
 
     Check feature consistency. Keys for all batch samples should be the same.
@@ -47,6 +46,9 @@ def collate_feature_dict(batch):
     ----------
     batch:
         list with feature dicts
+    inference:
+        flag for onnx collate
+        
     Returns
     -------
         PaddedBatch
@@ -71,9 +73,16 @@ def collate_feature_dict(batch):
         maybe(default_value=None, extraction_function=lambda list_of_transform_func: list_of_transform_func)
     for func, dict_tup in zip(list_of_transform_func, new_x.items()):
         new_x[dict_tup[0]] = func[0](dict_tup[1])
+        
+    return new_x, lengths
 
+def collate_feature_dict(batch):
+    new_x, lengths = collate_feature(batch)
     return PaddedBatch(new_x, lengths)
 
+def collate_feature_for_inference(batch):
+    new_x, lengths = collate_feature(batch)
+    return (new_x, lengths)
 
 def collate_target(x, num=1):
     vec = np.array(x, dtype=np.float32)

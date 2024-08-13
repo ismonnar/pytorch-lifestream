@@ -5,7 +5,7 @@ import joblib
 import pandas as pd
 import torch
 from pymonad.either import Either
-from joblib import parallel_backend, parallel_config, delayed, Parallel
+from joblib import parallel_backend, parallel_config, delayed, Parallel, cpu_count
 from ptls.data_load import IterableChain
 from ptls.data_load.iterable_processing.to_torch_tensor import ToTorch
 from ptls.preprocessing.dask.dask_client import DaskServer
@@ -30,7 +30,7 @@ class MemoryMapDataset(torch.utils.data.Dataset):
                 sample = f.transform(sample)
             return sample
 
-        with joblib.parallel_backend(backend='threading'):
+        with joblib.parallel_backend(backend='threading', n_jobs=1):
             parallel = Parallel(verbose=1)
             processed_data = parallel(delayed(_iterable_filtration)(row, i_filters)
                                       for row in data)

@@ -3,7 +3,7 @@ from operator import iadd
 
 import joblib
 import torch
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, cpu_count
 
 from ptls.data_load.feature_dict import FeatureDict
 from ptls.data_load.utils import collate_feature_dict
@@ -34,6 +34,7 @@ class ColesDataset(FeatureDict, torch.utils.data.Dataset):
         self.data = data
         self.splitter = splitter
         self.col_time = col_time
+        self.n_jobs = 1
 
     def __len__(self):
         return len(self.data)
@@ -52,7 +53,7 @@ class ColesDataset(FeatureDict, torch.utils.data.Dataset):
     def get_splits(self, feature_arrays):
         local_date = feature_arrays[self.col_time]
         indexes = self.splitter.split(local_date)
-        with joblib.parallel_backend(backend='threading'):
+        with joblib.parallel_backend(backend='threading', n_jobs=self.n_jobs):
             parallel = Parallel()
             result_dict = parallel(delayed(self._create_split_subset)(idx, feature_arrays)
                                    for idx in indexes)

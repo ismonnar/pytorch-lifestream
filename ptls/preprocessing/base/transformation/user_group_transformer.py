@@ -4,7 +4,7 @@ from typing import List
 import joblib
 import torch
 import pandas as pd
-from joblib import delayed, Parallel
+from joblib import delayed, Parallel, cpu_count
 from collections import ChainMap
 from ptls.preprocessing.base.transformation.col_numerical_transformer import ColTransformer
 
@@ -38,6 +38,7 @@ class UserGroupTransformer(ColTransformer):
         )
         self.cols_first_item = cols_first_item if cols_first_item is not None else []
         self.return_records = return_records
+        self.n_jobs = cpu_count(only_physical_cores=True)
 
     def __repr__(self):
         return 'Aggregate transformation'
@@ -71,7 +72,7 @@ class UserGroupTransformer(ColTransformer):
         return self
 
     def df_to_feature_arrays(self, df):
-        with joblib.parallel_backend(backend='threading'):
+        with joblib.parallel_backend(backend='threading', n_jobs=1):
             parallel = Parallel(verbose=1)
             result_dict = parallel(delayed(self._convert_type)(group_name, df_group)
                                    for group_name, df_group in df)
