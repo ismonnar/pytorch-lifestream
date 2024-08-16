@@ -80,7 +80,7 @@ def collate_feature_dict(batch):
     new_x, lengths = collate_feature(batch)
     return PaddedBatch(new_x, lengths)
 
-def collate_feature_for_inference(batch):
+def onnx_collate_feature_dict(batch):
     new_x, lengths = collate_feature(batch)
     return (new_x, lengths)
 

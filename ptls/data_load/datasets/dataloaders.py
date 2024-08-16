@@ -3,7 +3,7 @@ from typing import List, Dict
 from torch.utils.data import DataLoader
 
 from ptls.data_load import IterableChain
-from ptls.data_load.utils import collate_feature_for_inference
+from ptls.data_load.utils import collate_feature_dict, onnx_collate_feature_dict
 from ptls.data_load.filter_dataset import FilterDataset
 from ptls.data_load.iterable_processing import ToTorch, FilterNonArray, ISeqLenLimit
 
@@ -39,10 +39,14 @@ def inference_data_loader(
             # ISeqLenLimit(max_seq_len=max_seq_len),
         )
     )
-
+    if onnx:
+        collate_fn = onnx_collate_feature_dict
+    else:
+        collate_fn = collate_feature_dict
+        
     return DataLoader(
         dataset=dataset,
-        collate_fn=collate_feature_for_inference,
+        collate_fn=collate_fn,
         shuffle=False,
         num_workers=num_workers,
         batch_size=batch_size,
