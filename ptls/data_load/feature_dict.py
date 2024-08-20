@@ -56,7 +56,7 @@ class FeatureDict:
         -------
 
         """
-        return {k: v[ix] if FeatureDict.is_seq_feature(k, v) else v for k, v in d.items()}
+        return {k: v[ix] if FeatureDict.is_seq_feature(v[ix]) else v for k, v in d.items()}
 
     @staticmethod
     def get_seq_len(d):

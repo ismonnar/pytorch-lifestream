@@ -36,7 +36,7 @@ def inference_data_loader(
         post_processing=IterableChain(
             ToTorch(),
             FilterNonArray(),
-            # ISeqLenLimit(max_seq_len=max_seq_len),
+            ISeqLenLimit(max_seq_len=max_seq_len),
         )
     )
     if onnx:
