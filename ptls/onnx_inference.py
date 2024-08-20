@@ -1,6 +1,4 @@
 import os
-import numpy as np
-import psutil
 import torch
 from tqdm import tqdm
 import pytorch_lightning as pl
@@ -12,11 +10,6 @@ class ONNXInferenceModel(pl.LightningModule):
         self.model_name = model_path
         self.providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
         
-        self.so = ort.SessionOptions()
-        self.so.log_severity_level = 0
-        self.so.intra_op_num_threads = psutil.cpu_count(logical=True)
-        self.so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-
         if model is not None:
             batch = next(iter(dl))
             features, names, seq_len = self.preprocessing(batch)
@@ -28,10 +21,8 @@ class ONNXInferenceModel(pl.LightningModule):
         
         self.ort_session = ort.InferenceSession(
             model,
-            sess_options=self.so,
             providers=self.providers
         )
-        self.binding = self.ort_session.io_binding()
 
     def stack(self, x):
         return torch.stack([v for v in x[0].values()])
@@ -67,24 +58,22 @@ class ONNXInferenceModel(pl.LightningModule):
                             }
                     )
     
-    def forward(self, x):
+    def forward(self, x, dtype: torch.dtype = torch.float16):
         inputs = self.to_numpy(self.stack(x))
         output = self.ort_session.run(None, {"input": inputs})
-        return torch.tensor(output[0], dtype=torch.float32)
+        return torch.tensor(output[0], dtype=dtype)
 
-    def to(self, device="cpu", device_id="auto"):
-        self._device_type = str(device)
-        self._device_id = str(device_id-1) if isinstance(device_id, int) else device_id
+    def to(self, device):
         return self
 
     def size(self):
         return os.path.getsize(self.model_name)
     
-    def predict(self, dl):
+    def predict(self, dl, dtype: torch.dtype = torch.float32):
         pred = list()
-        desc = 'Predicting DataLoader:'
+        desc = 'Predicting DataLoader'
         with torch.no_grad():
             for batch in tqdm(dl, desc=desc):
-                output = self(batch)
+                output = self(batch, dtype=dtype)
                 pred.append(output)
         return pred
