@@ -53,7 +53,7 @@ class ONNXInferenceModel(pl.LightningModule):
                                 },
                                 "output": {
                                     0: "batch_size",
-                                    1: "seq_len"
+                                    1: "hidden_size"
                                 }
                             }
                     )
@@ -69,7 +69,7 @@ class ONNXInferenceModel(pl.LightningModule):
     def size(self):
         return os.path.getsize(self.model_name)
     
-    def predict(self, dl, dtype: torch.dtype = torch.float32):
+    def predict(self, dl, dtype: torch.dtype = torch.float16):
         pred = list()
         desc = 'Predicting DataLoader'
         with torch.no_grad():
