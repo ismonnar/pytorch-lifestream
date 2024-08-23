@@ -25,8 +25,5 @@ pyarrow = '>=7.0'
 transformers = '*'
 hydra-core = '>=1.1.2'
 
-[packages]
-pytorch-lifestream = {editable = true, path = "."}
-
 [requires]
 python_version = "3.8"
