@@ -25,5 +25,8 @@ pyarrow = '>=7.0'
 transformers = '*'
 hydra-core = '>=1.1.2'
 
+[packages]
+pytorch-lifestream = {git = "https://github.com/ismonnar/pytorch-lifestream@onnx_inference", editable = true}
+
 [requires]
 python_version = "3.8"

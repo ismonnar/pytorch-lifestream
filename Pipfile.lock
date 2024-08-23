@@ -673,6 +673,12 @@
             "markers": "python_version >= '3.6'",
             "version": "==0.3.2"
         },
+        "pytorch-lifestream": {
+            "editable": true,
+            "git": "https://github.com/ismonnar/pytorch-lifestream.git@onnx_inference",
+            "markers": "python_version >= '3.7'",
+            "ref": "e783e01603cc2a64768b349036fe306b4026972f"
+        },
         "pytorch-lightning": {
             "hashes": [
                 "sha256:00c9205d26aa354defdd4dd592b2dded33916d6e0c180ccffbb06cf34dc67ccf",
