@@ -7,29 +7,19 @@ from pymonad.maybe import Maybe
 from ptls.data_load.feature_dict import FeatureDict
 from ptls.data_load.padded_batch import PaddedBatch
 from itertools import compress
+from functools import reduce
 
 torch_to_numpy = torch.from_numpy
 
-
-def convert_dtype(np_arr):
-    np_arr = np.array(np_arr)
-    return torch_to_numpy(np_arr, dtype=dtype_dict[np_arr.dtype.kind])
+transform_func = {'seq_tensor': partial(torch.nn.utils.rnn.pad_sequence, batch_first=True),
+                  'target_tensor': torch.stack}
 
 
-def detect_transform_func(dtype_list):
-    transform_func = [partial(torch.nn.utils.rnn.pad_sequence, batch_first=True), torch.stack, None, np.array,
-                      convert_dtype]
-    return list(compress(transform_func, dtype_list))
-
-
-def detect_dtype(dict_tup):
+def detect_transform_func(dict_tup):
     target, tensor = dict_tup[0], dict_tup[1][0]
-    is_torch_tensor = isinstance(tensor, torch.Tensor)
-    is_torch_tensor_target = all([is_torch_tensor, target.startswith('target')])
-    is_np_array = isinstance(tensor, np.ndarray)
-    is_list = isinstance(tensor, list)
-    is_other = not any([is_list, is_torch_tensor, is_torch_tensor_target, is_np_array])
-    return [is_torch_tensor, is_torch_tensor_target, is_np_array, is_list, is_other]
+    tensor_type = 'target_tensor' if all([isinstance(tensor, torch.Tensor), target.startswith('target')]) \
+        else 'seq_tensor'
+    return transform_func[tensor_type]
 
 
 dtype_dict = {'i': torch.long,
@@ -67,22 +57,19 @@ def collate_feature(batch):
     del _
     seq_col = next(k for k, v in batch[0].items() if FeatureDict.is_seq_feature(v))
     lengths = torch.LongTensor(list(map(partial(_return_len, col_name=seq_col), batch)))
-    list_of_transform_func = Maybe.insert(list(new_x.items())).then(
-        function=lambda dict_tup: list(map(detect_dtype, dict_tup))). \
-        then(function=lambda dtype_list: list(map(detect_transform_func, dtype_list))). \
-        maybe(default_value=None, extraction_function=lambda list_of_transform_func: list_of_transform_func)
-    for func, dict_tup in zip(list_of_transform_func, new_x.items()):
-        new_x[dict_tup[0]] = func[0](dict_tup[1])
-        
-    return new_x, lengths
+    list_of_transform_func = Maybe.insert(iter(new_x.items())). \
+        maybe(default_value=None, extraction_function=lambda dict_tup: list(map(detect_transform_func, dict_tup)))
+
+    collated = {dict_tup[0]: list_of_transform_func[idx](dict_tup[1]) for idx, dict_tup in enumerate(new_x.items())}
+    return collated, lengths
 
 def collate_feature_dict(batch):
-    new_x, lengths = collate_feature(batch)
-    return PaddedBatch(new_x, lengths)
+    collated, lengths = collate_feature(batch)
+    return PaddedBatch(collated, lengths)
 
 def onnx_collate_feature_dict(batch):
-    new_x, lengths = collate_feature(batch)
-    return (new_x, lengths)
+    collated, lengths = collate_feature(batch)
+    return (collated, lengths)
 
 def collate_target(x, num=1):
     vec = np.array(x, dtype=np.float32)

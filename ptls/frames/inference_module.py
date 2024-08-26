@@ -90,10 +90,11 @@ class ONNXInferenceModule(InferenceModule):
             self.model_out_name,
             providers=self.providers
         )
-
+    
     def stack(self, x):
-        return torch.stack([v for v in x[0].values()])
-
+        x = [v for v in x[0].values()]
+        return torch.stack(x)
+    
     def preprocessing(self, x):
         features = self.stack(x)
         names = [k for k in x[0].keys()]
