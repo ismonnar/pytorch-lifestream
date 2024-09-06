@@ -97,11 +97,10 @@ class ParquetDataset(torch.utils.data.IterableDataset):
 
     def __init__(self,
                  data_files: Union[ParquetFiles, List[str]],
-                 # post_processing=None,
                  i_filters: List = None,
-                 shuffle_files=False,
-                 cache_schema=True,
-                 shuffle_seed=42
+                 shuffle_files: bool = False,
+                 cache_schema: bool = True,
+                 shuffle_seed: int = 42
                  ):
         if isinstance(data_files, ParquetFiles):
             self.data_files = data_files.data_files
@@ -158,10 +157,11 @@ class ParquetDataset(torch.utils.data.IterableDataset):
 
     @staticmethod
     def to_torch(x):
-        if type(x) is np.ndarray and x.dtype.kind in ('i', 'f'):
+        if isinstance(x, np.ndarray) and x.dtype.kind in ('i', 'f'):
             # return torch.from_numpy(x)
             return torch.from_numpy(np.array(x))
         # return torch.from_numpy(x)
+        return x
 
 
 class DistributedParquetDataset(ParquetDataset):
@@ -201,6 +201,8 @@ class DistributedParquetDataset(ParquetDataset):
         self.max_items_per_file = max_items_per_file
         self.items_per_worker = None
         self.repeat_items = repeat_items
+        self.real_worker_id = None
+        self.real_num_workers = None
 
     def _calc_min_items_per_worker(self):
         nums = []
@@ -247,8 +249,8 @@ class DistributedParquetDataset(ParquetDataset):
         else:
             gen = chain(*[self.iter_file(name) for name in my_files])
 
-        if self.post_processing is not None:
-            gen = self.post_processing(gen)
+        if self.i_filters is not None:
+            gen = self.i_filters(gen)
         return iter_with_max_num(gen, self.items_per_worker)
 
 
@@ -258,7 +260,7 @@ def read_pyarrow_file(path, use_threads=True):
         use_threads=use_threads,
     )
 
-    col_indexes = [n for n in p_table.column_names]
+    col_indexes = p_table.column_names
 
     def get_records():
         for rb in p_table.to_batches():
