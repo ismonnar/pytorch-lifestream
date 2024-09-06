@@ -10,6 +10,14 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryMapDataset(torch.utils.data.Dataset):
+    """
+    Dataset for in-memory data processing. It is useful for small datasets that can be loaded into memory.
+
+    Args:
+        data: iterable data
+        i_filters: list of iterable filters
+
+    """
     def __init__(self, data, i_filters: List[Iterable] = None):
         if i_filters is None:
             self.processed_data = [rec for rec in data]
@@ -28,12 +36,10 @@ class MemoryMapDataset(torch.utils.data.Dataset):
 class MemoryIterableDataset(torch.utils.data.IterableDataset):
     def __init__(self, data, i_filters=None):
         raise NotImplementedError()
-        """Multiprocessing case aren't defined
-        """
-        if i_filters is None:
-            i_filters = []
-        self.data = data
-        self.post_processor_filter = IterableChain(ToTorch(), *i_filters)
+        # if i_filters is None:
+        #     i_filters = []
+        # self.data = data
+        # self.post_processor_filter = IterableChain(ToTorch(), *i_filters)
 
     def __iter__(self):
         for rec in self.post_processor_filter(self.data):
