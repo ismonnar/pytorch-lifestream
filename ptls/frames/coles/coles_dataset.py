@@ -22,8 +22,10 @@ class ColesDataset(FeatureDict, torch.utils.data.Dataset):
     def __init__(self,
                  data,
                  splitter: AbsSplit,
-                 col_time='event_time',
-                 *args, **kwargs):
+                 col_time: str = 'event_time',
+                 *args,
+                 **kwargs
+                 ):
         super().__init__(*args, **kwargs)  # required for mixin class
 
         self.data = data
@@ -33,7 +35,7 @@ class ColesDataset(FeatureDict, torch.utils.data.Dataset):
     def __len__(self):
         return len(self.data)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int):
         feature_arrays = self.data[idx]
         return self.get_splits(feature_arrays)
 
@@ -41,7 +43,7 @@ class ColesDataset(FeatureDict, torch.utils.data.Dataset):
         for feature_arrays in self.data:
             yield self.get_splits(feature_arrays)
 
-    def get_splits(self, feature_arrays):
+    def get_splits(self, feature_arrays: dict):
         local_date = feature_arrays[self.col_time]
         indexes = self.splitter.split(local_date)
         return [{k: v[ix] for k, v in feature_arrays.items() if self.is_seq_feature(k, v)} for ix in indexes]

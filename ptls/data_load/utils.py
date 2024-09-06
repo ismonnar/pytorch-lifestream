@@ -1,27 +1,23 @@
-import numpy as np
-import torch
 from collections import defaultdict
 from functools import reduce
+
+import numpy as np
+import torch
 
 from ptls.data_load.feature_dict import FeatureDict
 from ptls.data_load.padded_batch import PaddedBatch
 
-from transformers.tokenization_utils_base import BatchEncoding
-
 
 def collate_feature_dict(batch):
-    """Collate feature with arrays to padded batch
-
+    """Collate feature with arrays to padded batch.
     Check feature consistency. Keys for all batch samples should be the same.
-    Convert scalar value to tensors like target col
+    Convert scalar value to tensors like target col.
 
-    Parameters
-    ----------
-    batch:
-        list with feature dicts
-    Returns
-    -------
+    Args:
+        batch: list with feature dicts
+    Returns:
         PaddedBatch
+
     """
     new_x_ = defaultdict(list)
     for i, x in enumerate(batch):
@@ -45,16 +41,22 @@ def collate_feature_dict(batch):
         elif isinstance(v[0], list):
             new_x[k] = np.array(v, dtype=object)
         else:
-            v = np.array(v)
-            if v.dtype.kind == 'i':
-                new_x[k] = torch.from_numpy(v).long()
-            elif v.dtype.kind == 'f':
-                new_x[k] = torch.from_numpy(v).float()
-            elif v.dtype.kind == 'b':
-                new_x[k] = torch.from_numpy(v).bool()
-            else:
-                new_x[k] = v
+            new_x = new_features(k, new_x, v)
     return PaddedBatch(new_x, lengths)
+
+
+def new_features(k, new_x, v):
+    v = np.array(v)
+    if v.dtype.kind == 'i':
+        new_x[k] = torch.from_numpy(v).long()
+    elif v.dtype.kind == 'f':
+        new_x[k] = torch.from_numpy(v).float()
+    elif v.dtype.kind == 'b':
+        new_x[k] = torch.from_numpy(v).bool()
+    else:
+        new_x[k] = v
+
+    return new_x
 
 
 def collate_target(x, num=1):
@@ -66,4 +68,16 @@ def collate_target(x, num=1):
     elif num < 0:
         return vec[:abs(num)]
     else:
-        return np.hstack((vec[:num-1], vec[num-1:].sum()))[:len(vec)]
+        return np.hstack((vec[:num - 1], vec[num - 1:].sum()))[:len(vec)]
+
+
+def init_worker(cls):
+    worker_info = torch.utils.data.get_worker_info()
+    if worker_info is None:  # single-process data loading, return the full iterator
+        cls._worker_id = 0
+        cls._num_workers = 1
+        cls._shuffle_seed = cls.shuffle_seed
+    else:  # in a worker process
+        cls._worker_id = worker_info.id
+        cls._num_workers = worker_info.num_workers
+        cls._shuffle_seed = worker_info.seed
