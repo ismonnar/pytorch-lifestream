@@ -4,33 +4,77 @@ from functools import reduce
 from collections import defaultdict
 from ptls.data_load.feature_dict import FeatureDict
 from ptls.data_load.padded_batch import PaddedBatch
-from ptls.data_load.utils import collate_multimodal_feature_dict, get_dict_class_labels
+from ptls.data_load.utils import new_features
 from ptls.frames.coles import MultiModalSortTimeSeqEncoderContainer
- 
+
+def collate_feature_dict(batch):
+    new_x_ = defaultdict(list)
+    for i, x in enumerate(batch):
+        for k, v in x.items():
+            new_x_[k].append(v)
+
+    seq_col = next(k for k, v in batch[0].items() if FeatureDict.is_seq_feature(k, v))
+    lengths = torch.LongTensor([len(rec[seq_col]) for rec in batch])
+    new_x = {}
+    for k, v in new_x_.items():
+        if type(v[0]) is torch.Tensor:
+            if k.startswith('target'):
+                new_x[k] = torch.stack(v, dim=0)
+            else:
+                new_x[k] = torch.nn.utils.rnn.pad_sequence(v, batch_first=True)
+        elif type(v[0]) is np.ndarray:
+            new_x[k] = v  # list of arrays[object]
+        else:
+            new_x = new_features(k, new_x, v)
+    return PaddedBatch(new_x, lengths)
+
+    
+def collate_multimodal_feature_dict(batch):
+    res = {}
+    for source, source_batch in batch.items():
+        res[source] = collate_feature_dict(source_batch)
+    return res
+    
+def get_dict_class_labels(batch):
+    res = defaultdict(list)
+    for i, samples in enumerate(batch):
+        for source, values in samples.items():
+            for _ in values:
+                res[source].append(i)
+    for source in res:
+        res[source] = torch.LongTensor(res[source])
+    return dict(res)
+            
 
 class MultiModalDataset(FeatureDict, torch.utils.data.Dataset):
     def __init__(
         self,
-        data: list,
-        splitter: object,
-        source_features: list,
-        col_id: str,
-        source_names: list,
-        col_time: str = 'event_time',
+        data,
+        splitter,
+        source_features,
+        col_id,
+        source_names,
+        col_time='event_time',
         *args, **kwargs
     ):
         """
         Dataset for multimodal learning.
-
-        Args:
-            data (list): Concatenated data with feature dicts.
-            splitter (object): Object from `ptls.frames.coles.split_strategy`.
-                Used to split original sequence into subsequences which are samples from one client.
-            source_features (list): List of column names.
-            col_id (str): Column name with user_id.
-            source_names (list): Column name with name sources, must be specified in the same order as trx_encoders in 
-                `ptls.frames.coles.multimodal_module.MultiModalSortTimeSeqEncoderContainer`.
-            col_time (str, optional): Column name with event_time. Defaults to 'event_time'.
+        Parameters:
+        -----------
+        data:
+            concatinated data with feature dicts.
+        splitter:
+            object from from `ptls.frames.coles.split_strategy`.
+            Used to split original sequence into subsequences which are samples from one client.
+        source_features:
+            list of column names 
+        col_id:
+            column name with user_id
+        source_names:
+            column name with name sources, must be specified in the same order as trx_encoders in 
+            ptls.frames.coles.multimodal_module.MultiModalSortTimeSeqEncoderContainer
+        col_time:
+            column name with event_time
         """
         super().__init__(*args, **kwargs)
         
