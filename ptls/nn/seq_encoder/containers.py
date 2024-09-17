@@ -1,7 +1,5 @@
 import torch
 
-from ptls.constant_repository import TORCH_EMB_DTYPE
-from ptls.data_load import PaddedBatch
 from ptls.nn.seq_encoder.rnn_encoder import RnnEncoder
 from ptls.nn.seq_encoder.transformer_encoder import TransformerEncoder
 from ptls.nn.seq_encoder.longformer_encoder import LongformerEncoder
@@ -35,7 +33,7 @@ class SeqEncoderContainer(torch.nn.Module):
                  is_reduce_sequence=True,  # most frequent default behavior
                  ):
         super().__init__()
-        self.default_dtype = TORCH_EMB_DTYPE
+
         self.trx_encoder = trx_encoder
         self.seq_encoder = seq_encoder_cls(
             input_size=input_size if input_size is not None else trx_encoder.output_size,
@@ -63,7 +61,7 @@ class SeqEncoderContainer(torch.nn.Module):
     def embedding_size(self):
         return self.seq_encoder.embedding_size
 
-    def forward(self, x: PaddedBatch):
+    def forward(self, x):
         x = self.trx_encoder(x)
         x = self.seq_encoder(x)
         return x
@@ -122,7 +120,7 @@ class RnnSeqEncoder(SeqEncoderContainer):
             is_reduce_sequence=is_reduce_sequence,
         )
 
-    def forward(self, x: PaddedBatch, h_0=None):
+    def forward(self, x, h_0=None):
         x = self.trx_encoder(x)
         x = self.seq_encoder(x, h_0)
         return x
@@ -224,7 +222,7 @@ class CustomSeqEncoder(SeqEncoderContainer):
             is_reduce_sequence=is_reduce_sequence,
         )
 
-    def forward(self, x: PaddedBatch):
+    def forward(self, x):
         z_trx = self.trx_encoder(x)
         out = self.seq_encoder(z_trx)
         return out

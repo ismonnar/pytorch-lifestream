@@ -71,5 +71,7 @@ class CoLESModule(ABSModule):
         return True
 
     def shared_step(self, x, y):
-        y_h = self._head(self(x)) if self._head is not None else self(x)
+        y_h = self(x)
+        if self._head is not None:
+            y_h = self._head(y_h)
         return y_h, y

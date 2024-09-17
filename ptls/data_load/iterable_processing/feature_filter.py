@@ -1,31 +1,21 @@
-from typing import Union
+import numpy as np
+import torch
 
 from ptls.data_load.iterable_processing_dataset import IterableProcessingDataset
 
 
 class FeatureFilter(IterableProcessingDataset):
-    """
-    Filter features by name. Keep only features with names from keep_feature_names.
-    Drop features with names from drop_feature_names.
-    Drop non-iterable features if drop_non_iterable is True.
+    def __init__(self, keep_feature_names=None, drop_feature_names=None, drop_non_iterable=True):
+        """
 
-    Args:
-        keep_feature_names: feature name for keep
-        drop_feature_names: feature name for drop
-        drop_non_iterable: drop non-iterable features
-
-    """
-
-    def __init__(self,
-                 keep_feature_names: Union[str, list] = (),
-                 drop_feature_names: Union[str, list] = (),
-                 drop_non_iterable: bool = True
-                 ):
+        Args:
+            keep_feature_names: feature name for keep
+        """
         super().__init__()
 
-        if isinstance(keep_feature_names, str):
+        if type(keep_feature_names) is str:
             keep_feature_names = [keep_feature_names]
-        if isinstance(drop_feature_names, str):
+        if type(drop_feature_names) is str:
             drop_feature_names = [drop_feature_names]
 
         self._keep_feature_names = set(keep_feature_names) if keep_feature_names is not None else None
@@ -33,17 +23,16 @@ class FeatureFilter(IterableProcessingDataset):
 
         self._drop_non_iterable = drop_non_iterable
 
-    def process(self, features: dict) -> dict:
-
-        for name in self._drop_feature_names:
-            if name not in self._keep_feature_names:
-                features.pop(name, None)
-
+    def process(self, features):
+        if self._drop_feature_names is not None:
+            features = {k: v for k, v in features.items()
+                        if k not in self._drop_feature_names or self.is_keep(k)}
         if self._drop_non_iterable:
-            return {name: val for name, val in features.items() if self.is_seq_feature(name, val) or self.is_keep(name)}
+            features = {k: v for k, v in features.items()
+                        if self.is_seq_feature(k, v) or self.is_keep(k)}
         return features
 
-    def is_keep(self, k: str) -> bool:
+    def is_keep(self, k):
         if self._keep_feature_names is None:
             return False
         return k in self._keep_feature_names

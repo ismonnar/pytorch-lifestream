@@ -8,5 +8,4 @@ class L2NormEncoder(nn.Module):
         self.eps = eps
 
     def forward(self, x: torch.Tensor):
-        norm = torch.linalg.norm(x, dim=-1, keepdim=True) + self.eps
-        return x / norm
+        return x / (x.pow(2).sum(dim=-1, keepdim=True) + self.eps).pow(0.5)
