@@ -40,8 +40,6 @@ class ABSModule(pl.LightningModule):
 
         self._optimizer_partial = optimizer_partial
         self._lr_scheduler_partial = lr_scheduler_partial
-        self._col_names = None
-        self._seq_len = None
  
     @property
     def metric_name(self):
@@ -69,9 +67,7 @@ class ABSModule(pl.LightningModule):
         return self._seq_encoder
 
     def forward(self, x):
-        names = self._col_names
-        seq_len = self._seq_len
-        return self._seq_encoder(x, names, seq_len)
+        return self._seq_encoder(x)
 
     def training_step(self, batch, _):
         y_h, y = self.shared_step(*batch)
@@ -88,7 +84,8 @@ class ABSModule(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, _):
-        self._validation_metric(self.shared_step(*batch))
+        y_h, y = self.shared_step(*batch)
+        self._validation_metric(y_h, y)
 
     def on_validation_epoch_end(self):
         self.log(f'valid/{self.metric_name}', self._validation_metric.compute(), prog_bar=True)
