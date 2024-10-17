@@ -39,8 +39,8 @@ class MemoryMapDataset(torch.utils.data.Dataset):
     def __apply_filters(self, data, i_filters):
         def _iterable_filtration(sample, i_filters):
             for f in i_filters:
-                sample = f.transform(sample)
-            return sample
+                sample = f(sample)
+            yield sample
 
         with joblib.parallel_backend(backend='threading', n_jobs=self.n_jobs):
             parallel = Parallel(verbose=1)
