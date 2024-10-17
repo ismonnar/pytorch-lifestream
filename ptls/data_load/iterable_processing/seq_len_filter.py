@@ -63,3 +63,6 @@ class SeqLenFilter(IterableProcessingDataset):
             raise ValueError(f"Can not find field with sequence from record: {rec}")
 
         return sequence_col
+    
+    def process(self, sample):
+        return SeqLenFilter(sample)
