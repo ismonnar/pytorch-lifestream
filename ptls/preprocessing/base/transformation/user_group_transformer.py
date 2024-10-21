@@ -77,11 +77,7 @@ class UserGroupTransformer(ColTransformer):
         return self
 
     def df_to_feature_arrays(self, df):
-        with joblib.parallel_backend(backend='threading', n_jobs=self.n_jobs):
-            parallel = Parallel(verbose=1)
-            result_dict = parallel(delayed(self._convert_type)(group_name, df_group)
-                                   for group_name, df_group in df)
-
+        result_dict = [self._convert_type(group_name, df_group) for group_name, df_group in df]
         return result_dict
 
     def transform(self, x: pd.DataFrame):

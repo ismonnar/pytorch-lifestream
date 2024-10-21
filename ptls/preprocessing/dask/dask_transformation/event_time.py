@@ -1,5 +1,5 @@
 import pandas as pd
-from ptls.preprocessing.pandas.col_transformer import ColTransformerPandasMixin
+from ptls.preprocessing.dask.dask_transformation.col_transformer import ColTransformerPandasMixin
 
 from ptls.preprocessing.base.transformation.col_numerical_transformer import ColTransformer
 

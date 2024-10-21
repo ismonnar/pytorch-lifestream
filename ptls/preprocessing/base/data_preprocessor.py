@@ -2,8 +2,8 @@ from functools import reduce
 from operator import iadd
 from typing import List, Union, Callable, Dict
 
-import dask.dataframe as dd
 import pandas as pd
+import dask.dataframe as dd
 from pymonad.either import Either
 from pymonad.maybe import Maybe
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -13,7 +13,7 @@ from ptls.preprocessing.base.transformation.col_event_time_transformer import Da
 from ptls.preprocessing.base.transformation.col_identity_transformer import ColIdentityEncoder
 from ptls.preprocessing.base.transformation.col_numerical_transformer import ColTransformer
 from ptls.preprocessing.base.transformation.user_group_transformer import UserGroupTransformer
-from ptls.preprocessing.multithread_dispatcher import DaskDispatcher
+from ptls.preprocessing.pandas.pandas_transformation.pandas_freq_transformer import FrequencyEncoder
 from ptls.preprocessing.pandas.pandas_transformation.category_identity_encoder import CategoryIdentityEncoder
 
 
@@ -25,7 +25,6 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
                  cols_numerical: List[str] = None,
                  cols_identity: List[str] = None,
                  t_user_group: ColTransformer = None,
-                 n_jobs: int = -1,
                  ):
         self.cl_id = col_id
         self.ct_event_time = col_event_time
@@ -33,7 +32,6 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
         self.cts_numerical = cols_numerical
         self.cols_identity = cols_identity
         self.t_user_group = t_user_group
-        self.n_jobs = n_jobs
         self._init_transform_function()
 
         self._all_col_transformers = [
@@ -43,14 +41,12 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
             [self.t_user_group],
         ]
         self.unitary_func, self.aggregate_func = {}, {}
-
         self._all_col_transformers = reduce(iadd, self._all_col_transformers, [])
-        self.multithread_dispatcher = DaskDispatcher()
 
     def _init_transform_function(self):
         self.cts_numerical = [ColIdentityEncoder(col_name_original=col) for col in self.cts_numerical]
         self.t_user_group = UserGroupTransformer(col_name_original=self.cl_id, cols_first_item=self.cols_first_item,
-                                                 return_records=self.return_records, n_jobs=self.n_jobs)
+                                                 return_records=self.return_records)
         if isinstance(self.ct_event_time, str):  # use as is
             self.ct_event_time = Either(value=self.ct_event_time,
                                         monoid=['event_time',
@@ -71,8 +67,6 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
                 right_function=lambda x: [CategoryIdentityEncoder(col_name_original=col) for col in
                                           self.cts_category])
 
-        return
-
     def _chunk_data(self, dataset: Union[pd.DataFrame, dd.DataFrame], func_to_transform: List[Callable]):
         col_dict, self.func_dict = {}, {}
         for func_name in func_to_transform:
@@ -90,7 +84,7 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
         transformed_df = pd.concat(result_dict, axis=1)
         for agg_col, agg_fun in self.aggregate_func.items():
             transformed_df[agg_col] = input_data[agg_col]
-            transformed_df = self.multithread_dispatcher.evaluate(individuals=transformed_df, objective_func=agg_fun)
+            transformed_df = agg_fun.fit_transform(transformed_df)
         return transformed_df
 
     def fit(self, x):
@@ -104,10 +98,8 @@ class DataPreprocessor(BaseEstimator, TransformerMixin):
     def fit_transform(self, X, y=None, **fit_params):
         transformed_cols = Maybe.insert(self._chunk_data(dataset=X, func_to_transform=self._all_col_transformers)) \
             .maybe(default_value=None,
-                   extraction_function=lambda chunked_data: self.multithread_dispatcher.evaluate(
-                       individuals=chunked_data, objective_func=self.unitary_func))
+                   extraction_function=lambda chunked_data: [func_impl.fit_transform(chunked_data[func_name]) for func_name, func_impl in self.unitary_func.items()])
         transformed_features = self._apply_aggregation(individuals=transformed_cols, input_data=X)
-        self.multithread_dispatcher.shutdown()
         return transformed_features
 
     def transform(self, X):

@@ -1,8 +1,10 @@
 import logging
-from typing import List, Union
+from typing import List, Dict, Union, Callable
 
 import numpy as np
 import pandas as pd
+from functools import reduce
+from pymonad.maybe import Maybe
 
 from ptls.preprocessing.base import DataPreprocessor
 from ptls.preprocessing.base.transformation.col_category_transformer import ColCategoryTransformer
@@ -71,19 +73,16 @@ class PandasDataPreprocessor(DataPreprocessor):
                  cols_identity: List[str] = None,
                  cols_first_item: List[str] = None,
                  return_records: bool = True,
-                 n_jobs: int = -1,
                  ):
         self.category_transformation = category_transformation
         self.return_records = return_records
         self.cols_first_item = cols_first_item
         self.event_time_transformation = event_time_transformation
-        self.n_jobs = n_jobs
         super().__init__(col_id=col_id,
                          col_event_time=col_event_time,
                          cols_category=cols_category,
                          cols_identity=cols_identity,
-                         cols_numerical=cols_numerical,
-                         n_jobs=n_jobs
+                         cols_numerical=cols_numerical
                          )
 
     @staticmethod
