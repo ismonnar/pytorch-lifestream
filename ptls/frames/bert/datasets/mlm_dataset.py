@@ -13,20 +13,24 @@ from ptls.data_load.utils import collate_feature_dict
 
 class MlmDataset(torch.utils.data.Dataset):
     """
-    Dataset for Masked Language Model.
 
-    Args:
-        data: List with all sequences.
-        min_len: Minimum length for RandomSlice.
-        max_len: Maximum length for RandomSlice.
-        rate_for_min: Rate for minimum length in RandomSlice. Defaults to 1.0.
+    Parameters
+    ----------
+    data:
+        List with all sequences
+    min_len:
+        RandomSlice params.
+    max_len:
+        RandomSlice params.
+    rate_for_min:
+        RandomSlice params.
     """
 
     def __init__(
         self,
-        data: list,
-        min_len: int,
-        max_len: int,
+        data,
+        min_len,
+        max_len,
         rate_for_min: float = 1.0,
         *args,
         **kwargs,

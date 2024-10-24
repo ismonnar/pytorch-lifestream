@@ -9,7 +9,8 @@ from sklearn.model_selection import train_test_split
 from ptls.data_load import padded_collate_wo_target
 from ptls.data_load.datasets import MemoryMapDataset
 from ptls.data_load.datasets.dataloaders import inference_data_loader
-from ptls.data_load.iterable_processing import SeqLenFilter, FilterNonArray, ISeqLenLimit
+from ptls.data_load.iterable_processing import FilterNonArray, ISeqLenLimit
+from ptls.data_load.iterable_processing import SeqLenFilter
 from ptls.frames.coles import CoLESModule, ColesDataset
 from ptls.frames.coles.split_strategy import SampleSlices
 from ptls.nn.seq_encoder import RnnSeqEncoder
@@ -20,14 +21,11 @@ from ptls.preprocessing.pandas.pandas_preprocessor import PandasDataPreprocessor
 def test_train_inference():
     source_data = pd.read_csv(Path(__file__).parent / "age-transactions.csv")
 
-    source_data = source_data.rename(mapper={'trans_date': 'event_time'},
-                                     axis=1)
-
     preprocessor = PandasDataPreprocessor(
         col_id='client_id',
-        col_event_time='event_time',
+        col_event_time='trans_date',
         event_time_transformation='none',
-        cols_category=["event_time", "small_group"],
+        cols_category=["trans_date", "small_group"],
         cols_numerical=["amount_rur"],
     )
 
