@@ -1,38 +1,47 @@
-import numpy as np
-import torch
-
+from typing import Optional, Set, Union
 from ptls.data_load.iterable_processing_dataset import IterableProcessingDataset
 
 
 class FeatureFilter(IterableProcessingDataset):
-    def __init__(self, keep_feature_names=None, drop_feature_names=None, drop_non_iterable=True):
-        """
+    """
+    Filter features by name. Keep only features with names from keep_feature_names.
+    Drop features with names from drop_feature_names.
+    Drop non-iterable features if drop_non_iterable is True.
 
-        Args:
-            keep_feature_names: feature name for keep
-        """
+    Args:
+        keep_feature_names: feature names to keep
+        drop_feature_names: feature names to drop
+        drop_non_iterable: whether to drop non-iterable features
+    """
+
+    def __init__(self,
+                 keep_feature_names: Optional[Union[str, Set[str]]] = None,
+                 drop_feature_names: Optional[Union[str, Set[str]]] = None,
+                 drop_non_iterable: bool = True
+                 ):
         super().__init__()
 
-        if type(keep_feature_names) is str:
-            keep_feature_names = [keep_feature_names]
-        if type(drop_feature_names) is str:
-            drop_feature_names = [drop_feature_names]
-
-        self._keep_feature_names = set(keep_feature_names) if keep_feature_names is not None else None
-        self._drop_feature_names = set(drop_feature_names) if drop_feature_names is not None else None
-
+        self._keep_feature_names = self._to_set(keep_feature_names)
+        self._drop_feature_names = self._to_set(drop_feature_names)
         self._drop_non_iterable = drop_non_iterable
 
-    def process(self, features):
-        if self._drop_feature_names is not None:
-            features = {k: v for k, v in features.items()
-                        if k not in self._drop_feature_names or self.is_keep(k)}
+    def _to_set(self, feature_names: Optional[Union[str, Set[str]]]) -> Optional[Set[str]]:
+        """Helper method to convert input to a set."""
+        if feature_names is None:
+            return None
+        if isinstance(feature_names, str):
+            return {feature_names}
+        return set(feature_names)
+
+    def process(self, features: dict) -> dict:
+        for name in self._drop_feature_names:
+            features.pop(name, None)
+
         if self._drop_non_iterable:
-            features = {k: v for k, v in features.items()
-                        if self.is_seq_feature(k, v) or self.is_keep(k)}
+            return {name: val for name, val in features.items() if self.is_seq_feature(name, val) or self.is_keep(name)}
+
         return features
 
-    def is_keep(self, k):
-        if self._keep_feature_names is None:
-            return False
-        return k in self._keep_feature_names
+    def is_keep(self, k: str) -> bool:
+        """Check if the feature name should be kept."""
+        return self._keep_feature_names is None or k in self._keep_feature_names
