@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pandas as pd
 import torch
 
@@ -34,12 +32,8 @@ def test_simple_processing():
         },
     ])
 
-    source = f"""
-        (SELECT * FROM read_csv_auto('{Path(__file__).parent / 'test_df.csv'}'))
-        """
-
     ds = DuckDbDataset(
-        data_read_func=source,
+        data_read_func='test_df',
         col_id='id',
         col_event_time='dt',
         col_event_fields=['sum', 'category']
