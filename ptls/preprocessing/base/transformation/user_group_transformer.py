@@ -34,7 +34,6 @@ class UserGroupTransformer(ColTransformer):
                  col_name_original: str,
                  cols_first_item: List[str] = None,
                  return_records: bool = False,
-                 n_jobs: int = -1,
                  ):
         super().__init__(
             col_name_original=col_name_original,
@@ -43,7 +42,6 @@ class UserGroupTransformer(ColTransformer):
         )
         self.cols_first_item = cols_first_item if cols_first_item is not None else []
         self.return_records = return_records
-        self.n_jobs = n_jobs
 
     def __repr__(self):
         return 'Aggregate transformation'
