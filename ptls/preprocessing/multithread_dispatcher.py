@@ -1,19 +1,17 @@
 from typing import Union, List, Dict, Callable
 
 import pandas as pd
-from joblib import wrap_non_picklable_objects, parallel_backend
+from joblib import wrap_non_picklable_objects, parallel_backend, Parallel, delayed
 from pymonad.maybe import Maybe
 from ptls.preprocessing.dask.dask_client import DaskServer
 
-from ptls.preprocessing.util import determine_n_jobs
-
 
 class DaskDispatcher:
-    def __init__(self):
-        self.dask_client = DaskServer().client
+    def __init__(self, n_jobs: int):
+        self.dask_client = DaskServer(n_jobs).client
         print(f'Link Dask Server - {self.dask_client.dashboard_link}')
         self.transformation_func = 'fit_transform'
-        self.n_jobs = determine_n_jobs(-1)
+        self.n_jobs = n_jobs
 
     def shutdown(self):
         self.dask_client.close()
