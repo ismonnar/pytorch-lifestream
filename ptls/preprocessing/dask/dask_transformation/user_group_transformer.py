@@ -4,6 +4,7 @@ from typing import List
 import joblib
 import torch
 import pandas as pd
+import dask.dataframe as dd
 from joblib import delayed, Parallel
 from collections import ChainMap
 from ptls.preprocessing.base.transformation.col_numerical_transformer import ColTransformer
@@ -49,12 +50,12 @@ class UserGroupTransformer(ColTransformer):
         return 'Aggregate transformation'
 
     def _event_time_exist(self, x):
-        if self.col_name_original not in x.columns:
+        if self.col_name_original not in list(x.keys()):
             raise AttributeError(f'col_name_original="{self.col_name_original}" not in source dataframe. '
-                                 f'Found {x.columns}')
-        if 'event_time' not in x.columns:
+                                 f'Found {list(x.keys())}')
+        if 'event_time' not in list(x.keys()):
             raise AttributeError(f'"event_time" not in source dataframe. '
-                                 f'Found {x.columns}')
+                                 f'Found {list(x.keys())}')
 
     def _convert_type(self, group_name, group_df):
         group = {}
@@ -77,14 +78,14 @@ class UserGroupTransformer(ColTransformer):
         return self
 
     def df_to_feature_arrays(self, df):
-        with joblib.parallel_backend(backend='threading', n_jobs=self.n_jobs):
-            parallel = Parallel(verbose=1)
+        with Parallel(verbose=1, n_jobs=self.n_jobs, prefer='threads') as parallel:
             result_dict = parallel(delayed(self._convert_type)(group_name, df_group)
                                    for group_name, df_group in df)
 
         return result_dict
 
     def transform(self, x: pd.DataFrame):
+        x = pd.DataFrame({k: v.compute() for k, v in x.items()})
         x['et_index'] = x.loc[:, 'event_time']
         x = x.set_index([self.col_name_original, 'et_index']).sort_index().groupby(self.col_name_original)
         x = self.df_to_feature_arrays(x)

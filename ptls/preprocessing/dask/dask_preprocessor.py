@@ -19,6 +19,7 @@ from ptls.preprocessing.dask.dask_transformation.event_time import DatetimeToTim
 from ptls.preprocessing.dask.dask_transformation.frequency_encoder import FrequencyEncoder
 from ptls.preprocessing.dask.dask_transformation.user_group_transformer import UserGroupTransformer
 from ptls.preprocessing.multithread_dispatcher import DaskDispatcher
+from ptls.preprocessing.util import determine_n_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,6 @@ class DaskDataPreprocessor(DataPreprocessor):
     """
 
     def __init__(self,
-                 path: str,
                  col_id: str,
                  col_event_time: Union[str, ColTransformer],
                  event_time_transformation: str = 'dt_to_timestamp',
@@ -67,34 +67,15 @@ class DaskDataPreprocessor(DataPreprocessor):
                  category_transformation: str = 'frequency',
                  cols_numerical: List[str] = None,
                  cols_identity: List[str] = None,
-                 cols_last_item: List[str] = None,
-                 max_trx_count: int = None,
-                 max_cat_num: Union[Dict[str, int], int] = 10000,
                  cols_first_item: List[str] = None,
                  return_records: bool = True,
-                 n_jobs: int = -1,
                  t_user_group: ColTransformer = None,
                  ):
-
-        self.dask_load_func = {'parquet': dd.read_parquet,
-                               'csv': dd.read_csv,
-                               'json': dd.read_json}
-
-        self.dask_df = self._create_dask_dataset(path)
-        self.multithread_dispatcher = DaskDispatcher()
-        
         self.category_transformation = category_transformation
         self.event_time_transformation = event_time_transformation
         self.cols_first_item = cols_first_item
         self.return_records = return_records
-        self.n_jobs = n_jobs
-        super().__init__(col_id=col_id,
-                         col_event_time=col_event_time,
-                         cols_category=cols_category,
-                         cols_identity=cols_identity,
-                         cols_numerical=cols_numerical
-                         )
-        
+        self.n_jobs = determine_n_jobs(-1)
         self.cl_id = col_id
         self.ct_event_time = col_event_time
         self.cts_category = cols_category
@@ -111,6 +92,12 @@ class DaskDataPreprocessor(DataPreprocessor):
         ]
         self.unitary_func, self.aggregate_func = {}, {}
         self._all_col_transformers = reduce(iadd, self._all_col_transformers, [])
+        self.multithread_dispatcher = DaskDispatcher(self.n_jobs)
+        
+        self.dask_load_func = {'parquet': dd.read_parquet,
+                               'csv': dd.read_csv,
+                               'json': dd.read_json,
+                               'pd.DataFrame': dd.from_pandas}
         
     def _init_transform_function(self):
         self.cts_numerical = [ColIdentityEncoder(col_name_original=col) for col in self.cts_numerical]
@@ -136,13 +123,12 @@ class DaskDataPreprocessor(DataPreprocessor):
                 right_function=lambda x: [CategoryIdentityEncoder(col_name_original=col) for col in
                                           self.cts_category])
 
-    def _create_dask_dataset(self, path):
-        for dataset in ['csv', 'json', 'parquet']:
-            if path.__contains__(dataset):
-                break
-            else:
-                raise AttributeError
-        df = self.dask_load_func[dataset](path)
+    def _create_dask_dataset(self, path_or_data):
+        for dataset in list(self.dask_load_func.keys()):
+            if path_or_data.__contains__(dataset):
+                df = self.dask_load_func[dataset](path_or_data)
+            elif dataset == 'pd.DataFrame':
+                df = self.dask_load_func[dataset](path_or_data, npartitions=self.n_jobs*5)
         return df
 
     def categorize(self):
@@ -151,98 +137,20 @@ class DaskDataPreprocessor(DataPreprocessor):
     def create_dask_dataset(self):
         self.dask_df = self.dask_df.persist()
 
-    # @staticmethod
-    # def _td_default(df, cols_event_time):
-    #     w = Window().orderBy(cols_event_time)
-    #     tmp_df = df.select(cols_event_time).distinct()
-    #     tmp_df = tmp_df.withColumn('event_time', F.row_number().over(w) - 1)
-    #     df = df.join(tmp_df, on=cols_event_time)
-    #     return df
-
-    # @staticmethod
-    # def _td_float(df, col_event_time):
-    #     logger.info('To-float time transformation begins...')
-    #     df = df.withColumn('event_time', F.col(col_event_time).astype('float'))
-    #     logger.info('To-float time transformation ends')
-    #     return df
-
-    # @staticmethod
-    # def _td_gender(df, col_event_time):
-    #     """Gender-dataset-like transformation
-    #     'd hh:mm:ss' -> float where integer part is day number and fractional part is seconds from day begin
-    #     '1 00:00:00' -> 1.0
-    #     '1 12:00:00' -> 1.5
-    #     '1 01:00:00' -> 1 + 1 / 24
-    #     '2 23:59:59' -> 1.99
-    #     '432 12:00:00' -> 432.5   '000432 12:00:00'
-    #     :param df:
-    #     :param col_event_time:
-    #     :return:
-    #     """
-
-    #     logger.info('Gender-dataset-like time transformation begins...')
-    #     df = df.withColumn('_et_day', F.substring(F.lpad(F.col(col_event_time), 15, '0'), 1, 6).cast('float'))
-
-    #     df = df.withColumn('_et_time', F.substring(F.lpad(F.col(col_event_time), 15, '0'), 8, 8))
-    #     df = df.withColumn('_et_time', F.regexp_replace('_et_time', r'\:60$', ':59'))
-    #     df = df.withColumn('_et_time', F.unix_timestamp('_et_time', 'HH:mm:ss') / (24 * 60 * 60))
-
-    #     df = df.withColumn('event_time', F.col('_et_day') + F.col('_et_time'))
-    #     df = df.drop('_et_day', '_et_time')
-    #     logger.info('Gender-dataset-like time transformation ends')
-    #     return df
-
-    # def _td_hours(self, df, col_event_time):
-    #     logger.info('To hours time transformation begins...')
-    #     df = df.withColumn('_dt', (F.col(col_event_time)).cast(dataType=T.TimestampType()))
-    #     df = df.withColumn('event_time', ((F.col('_dt')).cast('float') - self.time_min) / 3600)
-    #     df = df.drop('_dt')
-    #     logger.info('To hours time transformation ends')
-    #     return df
-
-    def _reset(self):
-        """Reset internal data-dependent state of the preprocessor, if necessary.
-        __init__ parameters are not touched.
-        """
-        self.time_min = None
-        self.remove_long_trx = False
-        self.max_trx_count = 5000
-        super()._reset()
-
-    def pd_hist(self, df, name, bins=10):
-        # logger.info('pd_hist begin')
-        # logger.info(f'sf = {self.config.sample_fraction}')
-        data = df.select(name)
-        if self.config.sample_fraction is not None:
-            data = data.sample(fraction=self.config.sample_fraction)
-        data = data.toPandas()[name]
-
-        if data.dtype.kind == 'f':
-            round_len = 1 if data.max() > bins + 1 else 2
-            bins = np.linspace(data.min(), data.max(), bins + 1).round(round_len)
-        elif np.percentile(data, 99) - data.min() > bins - 1:
-            bins = np.linspace(data.min(), np.percentile(data, 99), bins).astype(int).tolist() + [int(data.max() + 1)]
-        else:
-            bins = np.arange(data.min(), data.max() + 2, 1).astype(int)
-        df = pd.cut(data, bins, right=False).rename(name)
-        df = df.to_frame().assign(cnt=1).groupby(name)[['cnt']].sum()
-        df['% of total'] = df['cnt'] / df['cnt'].sum()
-        return df
-    
     def _apply_aggregation(self, individuals: List[Dict], input_data):
         result_dict = reduce(lambda a, b: {**a, **b}, individuals)
-        transformed_df = pd.concat(result_dict, axis=1)
+        transformed_df = dd.concat([result_dict], axis=1)
         for agg_col, agg_fun in self.aggregate_func.items():
             transformed_df[agg_col] = input_data[agg_col]
             transformed_df = self.multithread_dispatcher.evaluate(individuals=transformed_df, objective_func=agg_fun)
         return transformed_df
     
     def fit_transform(self, X, y=None, **fit_params):
-        X = dd.from_pandas(X, npartitions=12).persist()
-        transformed_cols = Maybe.insert(self._chunk_data(dataset=X.compute(), func_to_transform=self._all_col_transformers)) \
+        self.dask_df = X if isinstance(X, dd.DataFrame) else self._create_dask_dataset(X)
+        transformed_cols = Maybe.insert(self._chunk_data(dataset=self.dask_df, func_to_transform=self._all_col_transformers)) \
             .maybe(default_value=None,
                    extraction_function=lambda chunked_data: self.multithread_dispatcher.evaluate(
                        individuals=chunked_data, objective_func=self.unitary_func))
-        transformed_features = self._apply_aggregation(individuals=transformed_cols, input_data=X.compute())
+        transformed_features = self._apply_aggregation(individuals=transformed_cols, input_data=self.dask_df)
         self.multithread_dispatcher.shutdown()
         return transformed_features
