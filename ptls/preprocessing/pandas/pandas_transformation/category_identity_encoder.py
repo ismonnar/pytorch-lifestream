@@ -57,8 +57,10 @@ class CategoryIdentityEncoder(ColCategoryTransformer):
         self.min_fit_index = None
         self.max_fit_index = None
         self.filter_boundary = ['min', 'max']
+        
     def __repr__(self):
         return 'Unitary transformation'
+    
     def _detect_low_boundary(self, x):
         self.min_fit_index, self.max_fit_index = x.astype(int).agg(self.filter_boundary)
         if self.min_fit_index < 0:
@@ -74,6 +76,7 @@ class CategoryIdentityEncoder(ColCategoryTransformer):
         if max_index > self.max_fit_index:
             warnings.warn(f'Not fitted values. max_index({max_index}) < max_fit_index({self.max_fit_index})',
                           UserWarning)
+            
     def fit(self, x: pd.Series):
         super().fit(x)
         self._detect_low_boundary(x)
