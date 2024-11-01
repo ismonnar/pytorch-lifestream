@@ -1,13 +1,16 @@
+from functools import reduce
 from typing import List
 
+import joblib
 import torch
 import pandas as pd
+import dask.dataframe as dd
+from joblib import delayed, Parallel
+from collections import ChainMap
+from ptls.preprocessing.base.transformation.col_numerical_transformer import ColTransformer
 
-from ptls.preprocessing.base import ColTransformer
-from ptls.preprocessing.pandas.col_transformer import ColTransformerPandasMixin
 
-
-class UserGroupTransformer(ColTransformerPandasMixin, ColTransformer):
+class UserGroupTransformer(ColTransformer):
     """Groups transactions by user. Splits it by features.
 
     'event_time' column should be in dataset. We use it to order transactions
@@ -22,11 +25,17 @@ class UserGroupTransformer(ColTransformerPandasMixin, ColTransformer):
     return_records:
         False: Result is a dataframe. Use `.to_dict(orient='records')` to transform it to `ptls` format.
         True: Result is a list of dicts - `ptls` format
+    n_jobs:
+        Number of workers requested by the callers. 
+        Passing n_jobs=-1 means requesting all available workers for instance matching the number of
+        CPU cores on the worker host(s).
     """
+
     def __init__(self,
                  col_name_original: str,
                  cols_first_item: List[str] = None,
                  return_records: bool = False,
+                 n_jobs: int = -1,
                  ):
         super().__init__(
             col_name_original=col_name_original,
@@ -35,38 +44,50 @@ class UserGroupTransformer(ColTransformerPandasMixin, ColTransformer):
         )
         self.cols_first_item = cols_first_item if cols_first_item is not None else []
         self.return_records = return_records
+        self.n_jobs = n_jobs
+
+    def __repr__(self):
+        return 'Aggregate transformation'
+
+    def _event_time_exist(self, x):
+        if self.col_name_original not in list(x.keys()):
+            raise AttributeError(f'col_name_original="{self.col_name_original}" not in source dataframe. '
+                                 f'Found {list(x.keys())}')
+        if 'event_time' not in list(x.keys()):
+            raise AttributeError(f'"event_time" not in source dataframe. '
+                                 f'Found {list(x.keys())}')
+
+    def _convert_type(self, group_name, group_df):
+        group = {}
+
+        for k, v in group_df.to_dict(orient='series').items():
+            if k in self.cols_first_item:
+                v = v.iloc[0]
+            elif isinstance(v.iloc[0], torch.Tensor):
+                v = torch.vstack(tuple(v))
+            elif v.dtype == 'object':
+                v = v.values
+            else:
+                v = torch.from_numpy(v.values)
+            group[k] = v
+        group[self.col_name_original] = group_name
+        return group
 
     def fit(self, x):
-        # super().fit(x)
-        if self.col_name_original not in x.columns:
-            raise AttributeError(f'col_name_original="{self.col_name_original}" not in source dataframe. '
-                                 f'Found {x.columns}')
-        if 'event_time' not in x.columns:
-            raise AttributeError(f'"event_time" not in source dataframe. '
-                                 f'Found {x.columns}')
-        return self        
-    
-    def df_to_feature_arrays(self, df):
-        def decide(k, v):
-            if k in self.cols_first_item:
-                return v.iloc[0]
-            elif isinstance(v.iloc[0], torch.Tensor):
-                return torch.vstack(tuple(v))
-            elif v.dtype == 'object':
-                return v.values
-            else:
-                return torch.from_numpy(v.values)
+        self._event_time_exist(x)
+        return self
 
-        return pd.Series({k: decide(k, v)
-                          for k, v in df.to_dict(orient='series').items()})
+    def df_to_feature_arrays(self, df):
+        with Parallel(verbose=1, n_jobs=self.n_jobs, prefer='threads') as parallel:
+            result_dict = parallel(delayed(self._convert_type)(group_name, df_group)
+                                   for group_name, df_group in df)
+
+        return result_dict
 
     def transform(self, x: pd.DataFrame):
-        x = self.attach_column(x, x['event_time'].rename('et_index')).set_index([self.col_name_original, 'et_index'])
-        x = x.sort_index().groupby(self.col_name_original)
-        x = x.apply(self.df_to_feature_arrays).reset_index()
-
-        # we don't heed to drop original column in this transformer
-        # x = super().transform(x)
-        if self.return_records:
-            x = x.to_dict(orient='records')
+        x = pd.DataFrame({k: v.compute() for k, v in x.items()})
+        x['et_index'] = x.loc[:, 'event_time']
+        x = x.set_index([self.col_name_original, 'et_index']).sort_index().groupby(self.col_name_original)
+        x = self.df_to_feature_arrays(x)
+        x = x if self.return_records else pd.Series(x)
         return x
