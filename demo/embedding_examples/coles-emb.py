@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from functools import partial
 from ptls.nn import TrxEncoder, RnnSeqEncoder
 from ptls.frames.coles import CoLESModule
+from ptls.preprocessing.dask.dask_preprocessor import DaskDataPreprocessor
 from ptls.preprocessing.pandas.pandas_preprocessor import PandasDataPreprocessor
 from pyinstrument import Profiler
 import pytorch_lightning as pl
@@ -31,6 +32,13 @@ def define_data():
         cols_numerical=['amount_rur'],
         return_records=True
     )
+    params = dict(col_id='client_id',
+                  col_event_time='trans_date',
+                  event_time_transformation='none',
+                  cols_category=['small_group'],
+                  cols_numerical=['amount_rur'],
+                  return_records=True)
+    preprocessor = DaskDataPreprocessor(params)
     return preprocessor, source_data
 
 
