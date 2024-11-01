@@ -10,7 +10,7 @@ import dask.dataframe as dd
 from pymonad.either import Either
 from pymonad.maybe import Maybe
 
-from ptls.preprocessing.base import DataPreprocessor
+from ptls.preprocessing.base.data_preprocessor import DataPreprocessor
 from ptls.preprocessing.base.transformation.col_category_transformer import ColCategoryTransformer
 from ptls.preprocessing.base.transformation.col_identity_transformer import ColIdentityEncoder
 from ptls.preprocessing.base.transformation.col_numerical_transformer import ColTransformer
