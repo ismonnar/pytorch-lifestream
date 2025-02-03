@@ -1,7 +1,7 @@
 import logging
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Union
+from typing import List, Union
 import dask.dataframe as dd
 
 from ptls.preprocessing.base.data_preprocessor import DataPreprocessor
@@ -61,8 +61,6 @@ class DaskDataPreprocessor(DataPreprocessor):
                  cols_numerical: List[str] = None,
                  cols_identity: List[str] = None,
                  cols_last_item: List[str] = None,
-                 max_trx_count: int = None,
-                 max_cat_num: Union[Dict[str, int], int] = 10000,
                  ):
 
         self.dask_load_func = {'parquet': dd.read_parquet,
@@ -100,11 +98,7 @@ class DaskDataPreprocessor(DataPreprocessor):
             if type(col) is not str:
                 cts_category.append(col)  # use as is
             elif category_transformation == 'frequency':
-                if type(max_cat_num) is dict:
-                    mc = max_cat_num.get(col)
-                else:
-                    mc = max_cat_num
-                cts_category.append(FrequencyEncoder(col_name_original=col, max_cat_num=mc))
+                cts_category.append(FrequencyEncoder(col_name_original=col))
             elif category_transformation == 'none':
                 cts_category.append(CategoryIdentityEncoder(col_name_original=col))
             else:
@@ -113,8 +107,7 @@ class DaskDataPreprocessor(DataPreprocessor):
                                      f'`category_transformation` = "{category_transformation}"')
 
         cts_numerical = [ColIdentityEncoder(col_name_original=col) for col in cols_numerical]
-        t_user_group = UserGroupTransformer(
-            col_name_original=col_id, cols_last_item=cols_last_item, max_trx_count=max_trx_count)
+        t_user_group = UserGroupTransformer(col_name_original=col_id)
 
         super().__init__(
             col_event_time=ct_event_time,
@@ -122,6 +115,7 @@ class DaskDataPreprocessor(DataPreprocessor):
             cols_numerical=cts_numerical,
             cols_identity=cols_identity,
             t_user_group=t_user_group,
+            col_id=col_id
         )
 
     def _create_dask_dataset(self, path):
